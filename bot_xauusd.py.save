@@ -1,0 +1,55 @@
+import requests
+import pandas as pd
+import time
+from ta.momentum import RSIIndicator
+from ta.trend import MACD
+
+# Telegram API
+TELEGRAM_TOKEN = "TUO_TELEGRAM_BOT_TOKEN"
+CHAT_ID = "100353280"
+
+def send_telegram_message(message):
+    url = f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage'
+    data = {'chat_id': CHAT_ID, 'text': message}
+    response = requests.post(url, data=data)
+    return response.json()
+
+# Funzione per ottenere dati su XAU/USD
+def get_gold_data():
+    url = "https://query1.finance.yahoo.com/v7/finance/download/XAUUSD=X?interval=1h&events=history"
+    try:
+        df = pd.read_csv(url)
+        df["Date"] = pd.to_datetime(df["Date"])
+        df.set_index("Date", inplace=True)
+        df["RSI"] = RSIIndicator(df["Close"], window=14).rsi()
+        df["MACD"] = MACD(df["Close"], window_slow=26, window_fast=12, window_sign=9).macd()
+        return df
+    except:
+        return None
+
+# Controllo dei segnali di trading
+def check_signals():
+    df = get_gold_data()
+    if df is None:
+        return "Errore nel recupero dati."
+
+    last_row = df.iloc[-1]
+    
+    rsi = last_row["RSI"]
+    macd = last_row["MACD"]
+    
+    signal = None
+    if rsi < 30 and macd > 0:
+        signal = "🔵 Segnale di **BUY** su XAU/USD! RSI è in ipervenduto e MACD mostra forza rialzista."
+    elif rsi > 70 and macd < 0:
+        signal = "🔴 Segnale di **SELL** su XAU/USD! RSI è in ipercomprato e MACD mostra debolezza."
+
+    if signal:
+        send_telegram_message(signal)
+
+# Avvio del bot e controllo ogni ora
+send_telegram_message("✅ Bot di trading XAU/USD avviato con successo!")
+while True:
+    check_signals()
+    time.sleep(3600)  # Controlla il mercato ogni ora
+
